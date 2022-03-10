@@ -38,3 +38,6 @@ type UserAuthToken struct {
 	UserID    uint64
 	UserToken string
 }
+
+type UserAuth struct {
+}
