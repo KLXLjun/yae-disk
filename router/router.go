@@ -43,9 +43,7 @@ func Router(router *gin.Engine) {
 			}
 		}
 	})
-	//api.GET("/file/uploadauth", func(context *gin.Context) {
-	//
-	//})
+
 	api.POST("/file/upload/:id", func(c *gin.Context) {
 		FolderIDUParse := c.Param("id")
 		parseUint := utils.StringToUInt64(FolderIDUParse)
