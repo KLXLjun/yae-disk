@@ -1,0 +1,101 @@
+.doc-container {
+    padding-bottom: 100px;
+}
+
+.dm-lightbox-wrapper{
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1500;
+}
+
+.dm-lightbox{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.dm-lightbox-image{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.dm-lightbox-image img{
+    text-align: center;
+    height: 100%;
+}
+
+.dm-lightbox-ctrl{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    color: hsla(0,0%,100%,.75);
+}
+
+.dm-lightbox-close{
+    position: absolute;
+    right: 20px;
+    top: 20px;
+}
+
+.dm-lightbox-info{
+    display: inline-block;
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+}
+
+.dm-lightbox-info p{
+    font-size: 14px;
+    line-height: 16px;
+}
+
+.scroll-lock{
+    overflow: hidden;
+}
+
+.scroll-unlock{
+    overflow: scroll;
+}
+
+.unline{
+    line-height: unset!important;
+}
+
+.gbtn-c{
+    float: left;
+    line-height: 36px;
+    height: 18px;
+    margin-left: 8px;
+    margin-right: 8px;
+    border-left: 1px rgb(189 189 189) solid;
+    top: 9px;
+    position: inherit;
+}
+
+.contextmenu {
+    width: 300px;
+    z-index: 3000;
+    position: absolute;
+    padding: 5px 0;
+    transition: all ease-out 80ms;
+}
+
+.contextmenu li a{
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    left: 0;
+    z-index: 100;
+}
+
+.cpointer{
+    cursor: pointer;
+}

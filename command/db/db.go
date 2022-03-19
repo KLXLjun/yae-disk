@@ -2,14 +2,15 @@ package db
 
 import (
 	"YaeDisk/command/pack"
+	"YaeDisk/command/utils"
 	"YaeDisk/logx"
 	"YaeDisk/model"
 	"fmt"
 	"github.com/vmihailenco/msgpack"
 	"github.com/xujiajun/nutsdb"
 	"log"
-	"strconv"
 	"sync"
+	"time"
 )
 
 var dbClient *nutsdb.DB
@@ -18,6 +19,7 @@ const FileBucket string = "FileBucket"
 const FolderBucket string = "FolderBucket"
 const UserBucket string = "UserBucket"
 const ConfigBucket string = "ConfigBucket"
+const FilePathBucket string = "FilePathBucket"
 
 var fileIDCounter uint64
 var fileIDCouterLock sync.Mutex
@@ -35,7 +37,7 @@ func getID(idType string) uint64 {
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
 				Key := []byte("FileIDCount")
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(fileIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(fileIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -51,7 +53,7 @@ func getID(idType string) uint64 {
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
 				Key := []byte("FolderIDCount")
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(folderIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(folderIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -67,7 +69,7 @@ func getID(idType string) uint64 {
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
 				Key := []byte("UserIDCount")
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(userIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(userIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -108,17 +110,14 @@ func (m *FileMap) Init(input *nutsdb.Entries) {
 	m.file = make(map[uint64]model.FileStruct, 0)
 	if input != nil {
 		for _, entry := range *input {
-			parseUint, err := strconv.ParseUint(string(entry.Key), 0, 64)
+			parseUint := utils.BytesToInt64(entry.Key)
+			p2 := model.FileStruct{}
+			err := msgpack.Unmarshal(entry.Value, &p2) // 将二进制流转化回结构体
 			if err != nil {
-				logx.Warn("转换出现错误", err)
+				logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
 			} else {
-				p2 := model.FileStruct{}
-				err = msgpack.Unmarshal(entry.Value, &p2) // 将二进制流转化回结构体
-				if err != nil {
-					logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-				} else {
-					m.file[parseUint] = p2
-				}
+				logx.Debug("file", parseUint, p2)
+				m.file[parseUint] = p2
 			}
 		}
 	}
@@ -171,14 +170,15 @@ func (m *FolderMap) SearchHave(OwnerFolderID uint64, Name string) bool {
 	return false
 }
 
-func (m *FolderMap) PathSearch(path []string) (bool, *model.FolderStruct, []model.FileStruct, []model.FolderStruct) {
+func (m *FolderMap) PathSearch(path []string) (bool, model.FolderStruct, []model.FileStruct, []model.FolderStruct) {
 	m.RLock()
 	defer m.RUnlock()
 	rsl := make([]model.FolderStruct, 0)
 	lastFolder := model.FolderStruct{
 		FolderID:      0,
 		FolderName:    "Root",
-		CreateTime:    0,
+		CreateTime:    "2022-03-12 20:47:58",
+		ChangeTime:    "2022-03-12 20:47:58",
 		OwnerFolderID: 0,
 		OwnerUserID:   0,
 	}
@@ -191,7 +191,7 @@ func (m *FolderMap) PathSearch(path []string) (bool, *model.FolderStruct, []mode
 			}
 		}
 		filersl := FileList.FolderAllFile(0)
-		return true, &lastFolder, filersl, rsl
+		return true, lastFolder, filersl, rsl
 	} else {
 		PLen := len(path)
 		count := 0
@@ -207,15 +207,15 @@ func (m *FolderMap) PathSearch(path []string) (bool, *model.FolderStruct, []mode
 			PLen--
 		}
 		if lastFolder.FolderID == 0 {
-			return false, nil, nil, nil
+			return false, lastFolder, nil, nil
 		}
 		for _, folderStruct := range m.folder {
 			if folderStruct.OwnerFolderID == lastFolder.FolderID {
 				rsl = append(rsl, folderStruct)
 			}
 		}
-		filersl := FileList.FolderAllFile(lastFolder.FolderID)
-		return true, &lastFolder, filersl, rsl
+		fileRsl := FileList.FolderAllFile(lastFolder.FolderID)
+		return true, lastFolder, fileRsl, rsl
 	}
 }
 
@@ -224,18 +224,56 @@ func (m *FolderMap) Init(input *nutsdb.Entries) {
 	m.folder = make(map[uint64]model.FolderStruct, 0)
 	if input != nil {
 		for _, entry := range *input {
-			logx.Debug(entry.Key, string(entry.Key))
-			parseUint, err := strconv.ParseUint(string(entry.Key), 10, 64)
+			logx.Debug(entry.Key, utils.BytesToInt64(entry.Key))
+			parseUint := utils.BytesToInt64(entry.Key)
+			var p2 = model.FolderStruct{}
+			err := msgpack.Unmarshal(entry.Value, &p2) // 将二进制流转化回结构体
 			if err != nil {
-				logx.Warn("转换出现错误", err)
+				logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
 			} else {
-				var p2 = model.FolderStruct{}
-				err := msgpack.Unmarshal(entry.Value, &p2) // 将二进制流转化回结构体
-				if err != nil {
-					logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-				} else {
-					m.folder[parseUint] = p2
-				}
+				m.folder[parseUint] = p2
+			}
+		}
+	}
+	defer m.Unlock()
+}
+
+var FilePathList = new(FilePathMap)
+
+type FilePathMap struct {
+	folder map[uint64]string
+	sync.RWMutex
+}
+
+func (m *FilePathMap) Get(folderID uint64) string {
+	m.RLock()
+	defer m.RUnlock()
+	if val, ok := m.folder[folderID]; ok {
+		return val
+	} else {
+		return ""
+	}
+}
+
+func (m *FilePathMap) Set(folderID uint64, filepath string) {
+	m.Lock()
+	m.folder[folderID] = filepath
+	defer m.Unlock()
+}
+
+func (m *FilePathMap) Init(input *nutsdb.Entries) {
+	m.Lock()
+	m.folder = make(map[uint64]string, 0)
+	if input != nil {
+		for _, entry := range *input {
+			logx.Debug(entry.Key, utils.BytesToInt64(entry.Key))
+			parseUint := utils.BytesToInt64(entry.Key)
+			var p2 = ""
+			err := msgpack.Unmarshal(entry.Value, &p2) // 将二进制流转化回结构体
+			if err != nil {
+				logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
+			} else {
+				m.folder[parseUint] = p2
 			}
 		}
 	}
@@ -258,12 +296,52 @@ func Close() {
 	dbClient.Close()
 }
 
-func InsFile() {
-
+func InsFile(folderID uint64, file model.FileStruct) bool {
+	updateSet := model.FileStruct{}
+	var FID uint64 = 0
+	if have, rsl := HaveFile(folderID, file.FileName); have {
+		logx.Debug("检测到相同文件", rsl)
+		sets := rsl
+		sets.ChangeTime = file.ChangeTime
+		sets.FileSize = file.FileSize
+		FID = sets.FileID
+		updateSet = sets
+	} else {
+		FID = getID(FileBucket)
+		sets := file
+		sets.FileID = FID
+		updateSet = sets
+	}
+	logx.Debug("save", FID, updateSet)
+	if err := dbClient.Update(
+		func(tx *nutsdb.Tx) error {
+			if err := tx.Put(FileBucket, utils.UInt64ToBytes(FID), pack.EncodePack(updateSet), 0); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+		logx.Warn("创建文件/更新文件出现错误", err)
+		return false
+	}
+	FileList.Set(FID, updateSet)
+	return true
 }
 
-func UpFile() {
+func HaveFile(folderID uint64, fileName string) (bool, model.FileStruct) {
+	list := FileList.FolderAllFile(folderID)
+	for _, fileStruct := range list {
+		if fileStruct.FileName == fileName {
+			return true, fileStruct
+		}
+	}
+	return false, model.FileStruct{}
+}
 
+func HaveFolder(folderID uint64) bool {
+	if folderID == 0 {
+		return true
+	}
+	return FolderList.Get(folderID) == nil
 }
 
 func InsFolder(folderID uint64, folderName string) (bool, uint64, string) {
@@ -271,29 +349,28 @@ func InsFolder(folderID uint64, folderName string) (bool, uint64, string) {
 		return false, 0, "文件夹已存在"
 	}
 	FID := getID(FolderBucket)
+	tm := time.Now()
+	nowtime := tm.Format("2006-01-02 15:04:05")
 	val := model.FolderStruct{
 		FolderID:      FID,
 		FolderName:    folderName,
-		CreateTime:    0,
+		CreateTime:    nowtime,
+		ChangeTime:    nowtime,
 		OwnerFolderID: folderID,
 		OwnerUserID:   0,
 	}
 	if err := dbClient.Update(
 		func(tx *nutsdb.Tx) error {
-			if err := tx.Put(FolderBucket, []byte(strconv.FormatUint(FID, 10)), pack.EncodePack(val), 0); err != nil {
+			if err := tx.Put(FolderBucket, utils.UInt64ToBytes(FID), pack.EncodePack(val), 0); err != nil {
 				return err
 			}
 			return nil
 		}); err != nil {
-		log.Fatal(err)
+		logx.Warn("创建文件夹发生错误", err)
 	}
 
 	FolderList.Set(FID, val)
 	return true, FID, ""
-}
-
-func UpFolder() {
-
 }
 
 func basicConfig() {
@@ -303,13 +380,7 @@ func basicConfig() {
 			if e, err := tx.Get(ConfigBucket, Key); err != nil {
 				return err
 			} else {
-				var p2 uint64
-				err = msgpack.Unmarshal(e.Value, &p2) // 将二进制流转化回结构体
-				if err != nil {
-					logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-				} else {
-					fileIDCounter = p2
-				}
+				fileIDCounter = utils.BytesToInt64(e.Value)
 			}
 			return nil
 		}); err != nil {
@@ -319,7 +390,7 @@ func basicConfig() {
 
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(fileIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(fileIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -334,13 +405,7 @@ func basicConfig() {
 			if e, err := tx.Get(ConfigBucket, Key); err != nil {
 				return err
 			} else {
-				var p2 uint64
-				err = msgpack.Unmarshal(e.Value, &p2) // 将二进制流转化回结构体
-				if err != nil {
-					logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-				} else {
-					folderIDCounter = p2
-				}
+				folderIDCounter = utils.BytesToInt64(e.Value)
 			}
 			return nil
 		}); err != nil {
@@ -349,7 +414,7 @@ func basicConfig() {
 
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(folderIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(folderIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -364,13 +429,7 @@ func basicConfig() {
 			if e, err := tx.Get(ConfigBucket, Key); err != nil {
 				return err
 			} else {
-				var p2 uint64
-				err = msgpack.Unmarshal(e.Value, &p2) // 将二进制流转化回结构体
-				if err != nil {
-					logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-				} else {
-					userIDCounter = p2
-				}
+				userIDCounter = utils.BytesToInt64(e.Value)
 			}
 			return nil
 		}); err != nil {
@@ -379,7 +438,7 @@ func basicConfig() {
 
 		if err := dbClient.Update(
 			func(tx *nutsdb.Tx) error {
-				if err := tx.Put(ConfigBucket, Key, pack.EncodePack(userIDCounter), 0); err != nil {
+				if err := tx.Put(ConfigBucket, Key, utils.UInt64ToBytes(userIDCounter), 0); err != nil {
 					return err
 				}
 				return nil
@@ -450,6 +509,23 @@ func loadFileAndFolder() {
 			FolderList.Init(nil)
 		} else {
 			logx.Error("载入文件夹列表出错", err)
+		}
+	}
+
+	if err := dbClient.View(
+		func(tx *nutsdb.Tx) error {
+			entries, err := tx.GetAll(FilePathBucket)
+			if err != nil {
+				return err
+			}
+
+			FilePathList.Init(&entries)
+			return nil
+		}); err != nil {
+		if err == nutsdb.ErrBucketEmpty {
+			FilePathList.Init(nil)
+		} else {
+			logx.Error("载入文件列表出错", err)
 		}
 	}
 }
