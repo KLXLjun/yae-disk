@@ -2,45 +2,58 @@ package middleware
 
 import (
 	"YaeDisk/command/cache"
+	"YaeDisk/command/utils"
 	"YaeDisk/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"strconv"
 )
 
 func AuthMiddleware(c *gin.Context) {
 	token, err := c.Cookie("token")
 	if err != nil {
-		c.JSON(http.StatusForbidden, map[string]interface{}{
-			"msg": "验证错误,请重新登录",
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "验证错误,请重新登录",
 		})
 		return
 	}
 
-	uid, err := c.Cookie("uid")
+	uidCookie, err := c.Cookie("uid")
 	if err != nil {
-		c.JSON(http.StatusForbidden, map[string]interface{}{
-			"msg": "验证错误,请重新登录",
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "验证错误,请尝试重新登录解决问题",
 		})
 		return
 	}
 
-	parseUid, err := strconv.ParseUint(uid, 0, 64)
-	if err != nil {
+	isOk, UID := utils.StringToUInt64(uidCookie)
+	if !isOk {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "验证错误,请尝试重新登录解决问题",
+		})
 		return
 	}
 
-	ok, time := cache.CacheToken(parseUid, model.UserAuthToken{
-		UserID:    parseUid,
+	ip, ipOk := c.RemoteIP()
+	if !ipOk {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "true",
+			"msg":   "验证错误,请尝试重新登录解决问题",
+		})
+	}
+
+	ok, time := cache.TokenCache(UID, model.UserAuthToken{
+		UserID:    UID,
 		UserToken: token,
+		IP:        ip,
 	})
 
 	if ok {
 		c.Set("time", time)
 		c.Next()
 	} else {
-		c.JSON(http.StatusForbidden, map[string]interface{}{
-			"msg": "验证错误,请重新登录",
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "true",
+			"msg":   "验证错误,请重新登录",
 		})
 	}
 }

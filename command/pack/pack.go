@@ -14,13 +14,3 @@ func EncodePack(arg interface{}) []byte {
 	}
 	return b
 }
-
-func XDecodePack(arg []byte) interface{} {
-	var p2 interface{}
-	err := msgpack.Unmarshal(arg, &p2) // 将二进制流转化回结构体
-	if err != nil {
-		logx.Warn(fmt.Sprintf("msgpack unmarshal failed,err:%v", err))
-		return nil
-	}
-	return p2
-}

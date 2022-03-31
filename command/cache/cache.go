@@ -12,14 +12,14 @@ func InsToken(uid uint64, token model.UserAuthToken) {
 	tokenCache.Add(uid, time.Hour*24*7, token)
 }
 
-func CacheToken(uid uint64, inputToken model.UserAuthToken) (bool, string) {
+func TokenCache(uid uint64, inputToken model.UserAuthToken) (bool, string) {
 	if tokenCache.Exists(uid) {
 		item, err := tokenCache.Value(uid)
 		if err != nil {
 			return false, ""
 		}
 		saveToken := item.Data().(model.UserAuthToken)
-		if saveToken.UserID == inputToken.UserID && saveToken.UserToken == inputToken.UserToken {
+		if saveToken.UserID == inputToken.UserID && saveToken.UserToken == inputToken.UserToken && saveToken.IP.String() == inputToken.IP.String() {
 			return true, item.LifeSpan().String()
 		}
 		return false, ""

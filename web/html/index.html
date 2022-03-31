@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <title>YaeDisk</title>
     <link rel="stylesheet" href="/static/mdui/css/mdui.min.css" />
     <link rel="stylesheet" href="/static/css/1.css" />
     <script src="/static/mdui/js/mdui.min.js" type="text/javascript"/></script>
+    <script src="/static/js/spark-md5.min.js" type="text/javascript"/></script>
     <script src="/static/js/axios.min.js"></script>
     <style>
         body{
@@ -22,14 +23,14 @@
                 <!-- <span class="mdui-btn mdui-btn-icon mdui-ripple mdui-ripple-white" mdui-drawer="{target: '#main-drawer', swipe: true}"><i class="mdui-icon material-icons">menu</i></span> -->
                 <a class="mdui-typo-headline mdui-hidden-xs">Disk</a>
                 <div class="mdui-toolbar-spacer"></div>
+                <a href="javascript:;" class="mdui-btn mdui-btn-icon"><i class="mdui-icon material-icons">&#xe851;</i></a>
             </div>
         </header>
         <div class="mdui-container doc-container">
             <h2>正在浏览目录 - <span id="pathDirName">载入...</span></h2>
             <div class="mdui-btn-group" style="margin-bottom: 25px;">
-                <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '后退'}"><i class="mdui-icon material-icons">&#xe5c4;</i></button>
-                <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '前进'}"><i class="mdui-icon material-icons">&#xe5c8;</i></button>
-                <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '回到根目录'}"><i class="mdui-icon material-icons">&#xe5d8;</i></button>
+                <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '向上'}"><i class="mdui-icon material-icons">&#xe5d8;</i></button>
+                <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '回到根目录'}"><i class="mdui-icon material-icons">&#xe88a;</i></button>
                 <span class="gbtn-c">&nbsp;</span>
                 <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '上传文件'}" mdui-dialog="{target: '#upload-file'}"><i class="mdui-icon material-icons">&#xe2c6;</i></button>
                 <button type="button" class="mdui-btn unline" mdui-tooltip="{content: '创建文件夹'}"><i class="mdui-icon material-icons">&#xe2cc;</i></button>
@@ -49,14 +50,14 @@
                     </tr>
                     </thead>
                     <tbody id="folder_list" v-for="fls in NowFolderF.Folderlist">
-                    <tr @contextmenu.prevent="openMenu($event,0,fls.folder_id)" data-type="0" :data-folderid='fls.folder_id' class="cpointer">
+                    <tr data-type="0" class="cpointer">
                         <td>{{ fls.FolderName }}</td>
                         <td>-</td>
                         <td>-</td>
                     </tr>
                     </tbody>
                     <tbody id="file_list" v-for="fls in NowFolderF.Filelist">
-                    <tr @contextmenu.prevent="openMenu($event,1,fls.file_id)" data-type="1" :data-folderid='fls.fls.file_id' class="cpointer">
+                    <tr data-type="1" class="cpointer">
                         <td>{{ fls.FileName }}{{ fls.ExtName }}</td>
                         <td>{{ fls.ChangeTime }}</td>
                         <td>{{ fls.Size }}</td>
@@ -68,13 +69,12 @@
         </div>
         <div class="dm-lightbox-wrapper" id="fullscreen_view" style="display: none;">
             <div class="dm-lightbox">
-                <div class="dm-lightbox-image">
-                    <img id="full_view_img" src="" alt="">
+                <div class="dm-lightbox-image" id="full_view_img">
                 </div>
             </div>
             <div class="dm-lightbox-ctrl">
                 <div class="dm-lightbox-close">
-                    <span style="size: 20px;cursor: pointer;" onclick="File_PreView_close()">关闭</span>
+                    <span style="size: 20px;cursor: pointer;" onclick="File_PicturePreView_close()">关闭</span>
                 </div>
                 <div class="dm-lightbox-info" id="fullfile_info">
                     <p class="infos">文件基本信息</p>
@@ -82,15 +82,9 @@
                 </div>
             </div>
         </div>
-        <!-- <div style="position: absolute;z-index: 1500;top: 0;left: 0;height: 100%;width: 100%;background-color: rgba(0, 0, 0, 0.507);display: block;">
-            <img src="/preview/save/Texture2D/cg_000c.png">
-            <div style="height: 95%;width: 95%;background-image: url('/preview/save/Texture2D/cg_000c.png');background-repeat: no-repeat;background-position:center;background-size: cover;">
-
-            </div>
-        </div> -->
         <ul id="rightMenu" class="mdui-list contextmenu mdui-shadow-1 mdui-text-color-theme-text" oncontextmenu="return false;" style="background-color: white;display:none;left: 0px;top: 0px">
             <li class="mdui-list-item mdui-ripple" id="rghm1">
-                <a onclick="console.log(returnFileInfo(rightClickItem))"></a>
+                <a onclick="returnFileInfo(rightClickItemIndex)"></a>
                 <i class="mdui-icon material-icons">&#xe895;</i>
                 <div class="mdui-list-item-content" style="margin-left: 24px;">预览</div>
             </li>
@@ -139,9 +133,9 @@
             <span id="upfilename">未选择文件</span>
             <br />
             <input style="display: none;" type="file" id="file" name="myfile" />
-            <button class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="document.getElementById('file').click()"><i class="mdui-icon material-icons">&#xe24d;</i>&nbsp;选择文件</button>
-            <button class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="UpladFile()"><i class="mdui-icon material-icons">&#xe2c3;</i>&nbsp;开始上传</button>
-            <button class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="cancleUploadFile()"><i class="mdui-icon material-icons">&#xe5cd;</i>&nbsp;取消上传</button>
+            <button id="selectbtn" class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="document.getElementById('file').click()"><i class="mdui-icon material-icons">&#xe24d;</i>&nbsp;选择文件</button>
+            <button id="uploadbtn" class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="UpladFile()"><i class="mdui-icon material-icons">&#xe2c3;</i>&nbsp;开始上传</button>
+            <button id="cancelbtn" class="mdui-btn mdui-color-theme-accent mdui-ripple" onclick="cancleUploadFile()"><i class="mdui-icon material-icons">&#xe5cd;</i>&nbsp;取消上传</button>
         </div>
         <div class="mdui-dialog-actions">
             <button class="mdui-btn mdui-ripple" mdui-dialog-close>关闭</button>
@@ -149,45 +143,87 @@
     </div>
 </body>
 <script>
-    var rightClickItem = -1,
-        rightClickItemType = -1;
-    var rightMenuVisible = false;
-    var fileList = [],
+    let rightClickItem = -1,
+        rightClickItemType = -1,
+        rightClickItemIndex = -1;
+    let rightMenuVisible = false;
+    let fileList = [],
         folderList = [];
-    var currentFolderID = -1,
+    let currentFolderID = -1,
         currentFolderName = "载入中",
         change_time = "2022-03-12 20:47:58",
         create_time = "2022-03-12 20:47:58",
         owner_folder_id = "0",
         owner_user_id = "0";
 
-    var ot,oloaded;
+    let ot, oloaded, fmd5;
     //图片上传
-    var xhr;
+    let xhr;
     //上传文件方法
     document.getElementById("file").addEventListener("change",function (e) {
         var fileObj = document.getElementById("file").files[0]; // js 获取文件对象
-        console.log(fileObj.name)
-        upfilename.innerText = fileObj.name
+        console.log(fileObj.name);
+        document.getElementById("upfilename").innerText = fileObj.name;
+        document.getElementById("selectbtn").disabled = true;
+        var percentageDiv = document.getElementById("percentage");
+
+        var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+            file = this.files[0],
+            chunkSize = 2097152,                             // Read in chunks of 2MB
+            chunks = Math.ceil(file.size / chunkSize),
+            currentChunk = 0,
+            spark = new SparkMD5.ArrayBuffer(),
+            fileReader = new FileReader();
+
+        percentageDiv.innerText = "开始计算md5..."
+
+        fileReader.onload = function (e) {
+            percentageDiv.innerText = "计算文件块" + (currentChunk + 1) + "中,共" + chunks + "个文件块";
+            spark.append(e.target.result);                   // Append array buffer
+            currentChunk++;
+
+            if (currentChunk < chunks) {
+                loadNext();
+            } else {
+                fmd5 = spark.end();
+                console.info('computed hash', fmd5);  // Compute hash
+                document.getElementById("selectbtn").disabled = false;
+                percentageDiv.innerText = "计算完成,可以上传";
+            }
+        };
+
+        fileReader.onerror = function () {
+            percentageDiv.innerText = "计算出现错误"
+            console.warn('oops, something went wrong.');
+            document.getElementById("selectbtn").disabled = false;
+        };
+
+        function loadNext() {
+            var start = currentChunk * chunkSize,
+                end = ((start + chunkSize) >= file.size) ? file.size : start + chunkSize;
+            fileReader.readAsArrayBuffer(blobSlice.call(file, start, end));
+        }
+
+        loadNext();
     });
     function UpladFile() {
         var fileObj = document.getElementById("file").files[0]; // js 获取文件对象
-        console.log(fileObj.name)
-        upfilename.innerText = fileObj.name;
+        console.log(fileObj.name);
 
-        let origin = ""
+        let origin = "";
         if (!window.location.origin) {
             origin = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
         }else{
-            origin = window.location.origin
+            origin = window.location.origin;
         }
-        var url =  origin + "/api/file/upload/" + currentFolderID; // 接收上传文件的后台地址
+        var url =  origin + "/api/file/" + currentFolderID; // 接收上传文件的后台地址
 
         var form = new FormData(); // FormData 对象
         form.append("upload", fileObj); // 文件对象
 
         xhr = new XMLHttpRequest();  // XMLHttpRequest 对象
         xhr.open("post", url, true); //post方式，url为服务器请求地址，true 该参数规定请求是否异步处理。
+        xhr.setRequestHeader("filemd5")
         xhr.onload = uploadComplete; //请求完成
         xhr.onerror =  uploadFailed; //请求失败
 
@@ -204,17 +240,9 @@
     //上传成功响应
     function uploadComplete(evt) {
         //服务断接收完文件返回的结果
-        console.log(evt)
+        console.log(evt);
         var time = document.getElementById("time");
-        time.innerText = "上传操作已完成"
-        /*
-        var data = JSON.parse(evt.target.responseText);
-        if(data.success) {
-            alert("上传成功！");
-        }else{
-            alert("上传失败！");
-        }
-        */
+        time.innerText = "上传操作已完成";
     }
     //上传失败
     function uploadFailed(evt) {
@@ -233,7 +261,7 @@
         if (evt.lengthComputable) {//
             progressBar.max = evt.total;
             progressBar.value = evt.loaded;
-            percentageDiv.innerHTML = Math.round(evt.loaded / evt.total * 100) + "%";
+            percentageDiv.innerText = Math.round(evt.loaded / evt.total * 100) + "%";
         }
         var time = document.getElementById("time");
         var nt = new Date().getTime();//获取当前时间
@@ -262,20 +290,20 @@
         speed = speed.toFixed(1);
         //剩余时间
         var resttime = ((evt.total-evt.loaded)/bspeed).toFixed(1);
-        time.innerHTML = '，速度：'+speed+units+'，剩余时间：'+resttime+'s';
+        time.innerText = '，速度：'+speed+units+'，剩余时间：'+resttime+'s';
         if(bspeed==0) time.innerHTML = '上传已取消';
     }
 </script>
 <script>
     function ChangeMenu(type) {
         if(type == 0){
-            console.log("选中文件夹")
+            console.log("选中文件夹");
             document.getElementById("rghm1").style.display = "none";
-            document.getElementById("rghm2").style.display = "flex";
-        }else if(type == 1){
-            console.log("选中文件")
-            document.getElementById("rghm1").style.display = "flex";
             document.getElementById("rghm2").style.display = "none";
+        }else if(type == 1){
+            console.log("选中文件");
+            document.getElementById("rghm1").style.display = "flex";
+            document.getElementById("rghm2").style.display = "flex";
         }
     }
 
@@ -284,9 +312,10 @@
         document.getElementById("rightMenu").style.display = "none";
     });
 
-    function openMenu(e, type, item) {
+    function openMenu(e, type, item, index) {
         rightClickItem = item;
         rightClickItemType = type;
+        rightClickItemIndex = index;
 
         e.preventDefault();
         let x = e.clientX;
@@ -295,17 +324,11 @@
         document.getElementById("rightMenu").style.top = y + "px";
         document.getElementById("rightMenu").style.left = x + "px";
 
-        let h;
-        e.path.forEach(element => {
-            //console.log(element)
-            if(element.classList != null && element.classList.contains('cpointer') && h == null){
-                h = element;
-            }
-        });
+        let h = e.target.parentElement;
 
         if(h){
             console.log(rightClickItem,rightClickItemType);
-            ChangeMenu(rightClickItemType)
+            ChangeMenu(rightClickItemType);
 
             rightMenuVisible = true;
             document.getElementById("rightMenu").style.display = "block";
@@ -313,13 +336,10 @@
     }
 
     function returnFileInfo(id){
-        if(id < 0) return null;
-        let listcache = this.NowFolderF.Filelist
-        for (let index = 0; index < listcache.length; index++) {
-            const element = listcache[index];
-            if(element.FileID == id){
-                return element
-            }
+        const element = fileList[id];
+        let x = fileIdentify(element.file_name,false);
+        if(x == 3){
+            File_PicturePreView(element.file_id);
         }
     }
     //rightmenu func
@@ -337,7 +357,7 @@
             let p = res.data;
             let pflist = p.file;
             currentFolderID = p.folder_id;
-            console.log(p.folder_id)
+            console.log(p.folder_id);
             currentFolderName = p.folder_name;
             document.getElementById("pathDirName").innerText = p.folder_name;
 
@@ -354,14 +374,16 @@
             document.getElementById("folderCount").innerText = folderList.length;
 
             document.getElementById("folder_list").innerHTML = "";
-            for (let folderElement of p.folder) {
-                let element = GenTableRow(folderElement,0)
+            for (let i = 0; i < p.folder.length; i++) {
+                let folderElement = p.folder[i];
+                let element = GenTableRow(folderElement,0,i);
                 document.getElementById("folder_list").appendChild(element);
             }
 
             document.getElementById("file_list").innerHTML = "";
-            for (let fileElement of p.file) {
-                let element = GenTableRow(fileElement,1)
+            for (let i = 0; i < p.file.length; i++) {
+                let fileElement = p.file[i];
+                let element = GenTableRow(fileElement,1,i);
                 document.getElementById("file_list").appendChild(element);
             }
             mdui.updateTables()
@@ -372,7 +394,7 @@
 
     GetFolderAndFile(getPathUrl())
 
-    function GenTableRow(row,type) {
+    function GenTableRow(row,type,index) {
         if(type == 0){
             let rowEle = document.createElement("tr");
             rowEle.className = "cpointer";
@@ -387,7 +409,7 @@
             rowEle.appendChild(row2);
             rowEle.appendChild(row3);
             rowEle.addEventListener("contextmenu",(e) => {
-                openMenu(e,0,row.folder_id);
+                openMenu(e,0,row.folder_id,index);
             });
             return rowEle;
         }else if(type == 1){
@@ -404,15 +426,32 @@
             rowEle.appendChild(row2);
             rowEle.appendChild(row3);
             rowEle.addEventListener("contextmenu",(e) => {
-                openMenu(e,1,row.file_id);
+                console.log(e)
+                openMenu(e,1,row.file_id,index);
             });
             return rowEle;
         }
         return null;
     }
 
-    /* 预览 */
-    function File_PreView_close(){
+    //视频
+    function File_VideoPreView_close() {
+
+    }
+    function File_VideoPreView(idx){
+
+    }
+
+    //音频
+    function File_AudioPreView_close() {
+
+    }
+    function File_AudioPreView(idx){
+
+    }
+
+    // 图片
+    function File_PicturePreView_close(){
         document.getElementById('fullscreen_view').style.display ='none'
         document.getElementById('full_view_img').src = '/preview/';
         if(document.querySelector('body').classList.contains('scroll-lock')){
@@ -420,27 +459,27 @@
             document.querySelector('body').classList.add('scroll-unlock');
         }
     }
-
-    function File_PreView(idx){
+    function File_PicturePreView(idx){
         if(document.querySelector('body').classList.contains('scroll-unlock')){
             document.querySelector('body').classList.remove('scroll-unlock')
             document.querySelector('body').classList.add('scroll-lock');
         }
 
-        let b = cfg.all_file[idx].path;
-        document.getElementById('full_view_img').src = '/preview/' + b;
+        document.getElementById('full_view_img').style.backgroundImage = 'url("/api/file/' + idx + '")';
         document.getElementById('fullscreen_view').style.display = 'block';
         //console.log(cfg.all_file[idx],cfg.all_file)
-        let a = document.getElementById('fullfile_info').querySelectorAll('p')
+        let a = document.getElementById('fullfile_info').querySelectorAll('p');
 
-        let ajaxRequest = new XMLHttpRequest();
-        ajaxRequest.open('GET', '/picinfo/streamline/' + b, true);
-        ajaxRequest.responseType = 'json';
-        ajaxRequest.onload = function() {
-            a[1].innerText = ajaxRequest.response.Resolution;
-        }
-        ajaxRequest.send();
+        // let ajaxRequest = new XMLHttpRequest();
+        // ajaxRequest.open('GET', '/picinfo/streamline/' + b, true);
+        // ajaxRequest.responseType = 'json';
+        // ajaxRequest.onload = function() {
+        //     a[1].innerText = ajaxRequest.response.Resolution;
+        // }
+        // ajaxRequest.send();
     }
+
+
 
     Date.prototype.formatDate = function(format){
         let thisData = this;
@@ -465,9 +504,12 @@
         return format;
     }
 
-    /*
-    function file_Identify(sx,tp){
-        let rv = /(mp4|webm|flv)/;
+    function fileIdentify(name,tp){
+        if(name.lastIndexOf(".") === -1){
+            return tp?"无法识别":-1;
+        }
+        let sx = name.substring(name.lastIndexOf(".") + 1);
+        let rv = /(mp4|webm)/;
         let ra = /(mp3|m4a|wav|aac)/;
         let rp = /(png|jpg|bmp|webp)/;
 
@@ -481,17 +523,17 @@
             return tp?"无法识别":-1;
         }
     }
-    */
+
     function getPathUrl(){
         let pt = window.document.location.pathname;
         let x = pt.split("/");
         let r = [];
         for (let xKey of x) {
-            if(xKey != ""){
+            if(xKey !== ""){
                 r.push(xKey)
             }
         }
-        if(r[0] == "disk"){
+        if(r[0] === "disk"){
             r.shift()
         }
         let s = "/";
@@ -502,22 +544,6 @@
     }
 
     console.log(getPathUrl())
-
-    function file_Identify(sx){
-        let rv = /(mp4|webm|flv)/;
-        let ra = /(mp3|m4a|wav|aac)/;
-        let rp = /(png|jpg|bmp|webp|tiff)/;
-
-        if(rv.test(sx)){
-            return 1;
-        }else if(ra.test(sx)){
-            return 2;
-        }else if(rp.test(sx)){
-            return 3
-        }else{
-            return -1;
-        }
-    }
 
     function GetM(a){
         if(a>1024){

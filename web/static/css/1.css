@@ -25,11 +25,15 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-origin: content-box;
+    background-position: center;
 }
 
 .dm-lightbox-image img{
     text-align: center;
-    height: 100%;
+    width: 100%;
 }
 
 .dm-lightbox-ctrl{
