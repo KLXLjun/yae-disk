@@ -1,0 +1,31 @@
+CREATE TABLE "User" (
+	"UserID"	INTEGER NOT NULL UNIQUE,
+	"UserName"	TEXT NOT NULL UNIQUE,
+	"Password"	TEXT NOT NULL,
+	PRIMARY KEY("UserID" AUTOINCREMENT)
+);
+
+CREATE TABLE "UserGroup" (
+	"GroupID"	INTEGER NOT NULL UNIQUE,
+	"GroupName"	TEXT NOT NULL UNIQUE,
+	"OwnerUserID"	INTEGER NOT NULL,
+	PRIMARY KEY("GroupID" AUTOINCREMENT)
+);
+
+CREATE TABLE "UserGroupMap" (
+	"UserID"	INTEGER NOT NULL,
+	"GroupID"	INTEGER NOT NULL
+);
+
+CREATE TABLE "FileTable" (
+	"ID"	char(16) NOT NULL UNIQUE,
+	"IsDir"	bit NOT NULL,
+	"OwnerFolder"	char(16) NOT NULL,
+	"OwnerID"	char(16) NOT NULL,
+	"OwnerGroup"	INTEGER NOT NULL,
+	"Name"	TEXT NOT NULL,
+	"Size"	INTEGER NOT NULL,
+	"ChangeTime"	datetime NOT NULL,
+	"CreateTime"	datetime NOT NULL,
+	PRIMARY KEY("ID")
+)

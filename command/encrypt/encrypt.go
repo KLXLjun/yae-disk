@@ -63,6 +63,10 @@ func Crc32SumStr(file string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+func Crc32Str(str string) string {
+	return fmt.Sprintf("%x", crc32.ChecksumIEEE([]byte(str)))
+}
+
 func Sha1SumFile(file io.Reader) string {
 	h := sha1.New()
 	_, err := io.Copy(h, file)

@@ -4,6 +4,7 @@
 
 .dm-lightbox-wrapper{
     position: fixed;
+    justify-content: center;
     width: 100%;
     height: 100vh;
     top: 0;
@@ -19,16 +20,8 @@
 }
 
 .dm-lightbox-image{
-    position: absolute;
-    width: 100%;
+    width: auto;
     height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-repeat: no-repeat;
-    background-size: contain;
-    background-origin: content-box;
-    background-position: center;
 }
 
 .dm-lightbox-image img{
@@ -102,4 +95,5 @@
 
 .cpointer{
     cursor: pointer;
+    user-select: none;
 }

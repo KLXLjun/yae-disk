@@ -1,17 +1,18 @@
 package router
 
 import (
-	"YaeDisk/command/db"
+	"YaeDisk/command/database"
 	"YaeDisk/command/encrypt"
 	"YaeDisk/command/utils"
 	"YaeDisk/logx"
 	"YaeDisk/model"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
-	"strconv"
+	"path"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 var SavePath = "./save"
@@ -30,17 +31,15 @@ func Router(router *gin.Engine) {
 			}
 		}
 		logx.Debug("路径:"+path, xm, len(xm))
-		ok, FolderInfo, FileList, FolderList := db.FolderList.PathSearch(xm)
+		ok, FolderInfo, AllFile := database.PathSearch(xm)
 		if ok {
-			c.JSON(http.StatusOK, model.ResultFolderStruct{
-				FolderID:      FolderInfo.FolderID,
-				FolderName:    FolderInfo.FolderName,
-				ChangeTime:    FolderInfo.ChangeTime,
-				CreateTime:    FolderInfo.CreateTime,
-				OwnerFolderID: FolderInfo.OwnerFolderID,
-				OwnerUserID:   FolderInfo.OwnerUserID,
-				File:          FileList,
-				Folder:        FolderList,
+			c.JSON(http.StatusOK, gin.H{
+				"folder_id":   FolderInfo.Self.ID,
+				"folder_name": FolderInfo.Name,
+				"create_time": FolderInfo.Self.CreateTime,
+				"change_time": FolderInfo.Self.ChangeTime,
+				"file":        AllFile.File,
+				"folder":      AllFile.Folder,
 			})
 		} else {
 			c.JSON(http.StatusNotFound, map[string]interface{}{
@@ -51,52 +50,96 @@ func Router(router *gin.Engine) {
 	})
 
 	folder := api.Group("/folder")
-	folder.POST("/:id/create/:name", func(context *gin.Context) {
-		FolderIDUParse := context.Param("id")
+	folder.POST("/create/:name/to/*path", func(context *gin.Context) {
+		Path := context.Param("path")
 		FolderName := context.Param("name")
-		parseFID, err := strconv.ParseUint(FolderIDUParse, 10, 64)
-		if err != nil {
-			logx.Warn("转换文件夹ID出错 输入ID为:", FolderIDUParse, "错误为:", err)
-			context.JSON(http.StatusBadRequest, gin.H{
-				"error": "未知的文件夹ID",
-			})
-		} else {
-			isOk, outFID := db.InsFolder(parseFID, FolderName)
-			if isOk {
-				context.Status(http.StatusOK)
-			} else {
-				if outFID == parseFID {
-					context.JSON(http.StatusNotFound, gin.H{
-						"error": "文件夹已存在",
-					})
-				} else {
-					context.JSON(http.StatusNotFound, gin.H{
-						"error": "创建文件夹时发生了错误",
-					})
-				}
+		pathArr := strings.Split(Path, "/")
+		xm := make([]string, 0)
+		for _, s := range pathArr {
+			if len(s) > 0 {
+				xm = append(xm, s)
 			}
+		}
+
+		have, searchPath, FolderAllFile := database.PathSearch(xm)
+		if !have {
+			context.JSON(http.StatusNotFound, gin.H{
+				"error": "没有这个文件夹",
+			})
+		}
+
+		for _, v := range FolderAllFile.File {
+			if v.Name == FolderName {
+				context.JSON(http.StatusBadRequest, gin.H{
+					"error": "文件已存在",
+				})
+				return
+			}
+		}
+
+		for _, v := range FolderAllFile.Folder {
+			if v.Name == FolderName {
+				context.JSON(http.StatusBadRequest, gin.H{
+					"error": "文件夹已存在",
+				})
+				return
+			}
+		}
+
+		fileID := utils.GenerateID()
+		if fileID == "" {
+			context.JSON(http.StatusInternalServerError, gin.H{
+				"error": "很抱歉,文件ID生成错误,请重试",
+			})
+			return
+		}
+
+		tm := time.Now()
+		self := &model.FileRowStruct{
+			ID:          fileID,
+			IsDir:       true,
+			OwnerFolder: searchPath.Self.ID,
+			OwnerID:     "0",
+			OwnerGroup:  "0",
+			Name:        FolderName,
+			Size:        0,
+			ChangeTime:  tm,
+			CreateTime:  tm,
+		}
+		if ok := database.Insert(self); ok == nil {
+			searchPath.Child = append(searchPath.Child, &database.File{
+				Name:   FolderName,
+				IsDir:  true,
+				Parent: searchPath,
+				Self:   self,
+				Child:  make([]*database.File, 0),
+			})
+			context.Status(http.StatusOK)
+		} else {
+			context.JSON(http.StatusInternalServerError, gin.H{
+				"error": ok.Error(),
+			})
 		}
 	})
 
 	file := api.Group("/file")
-	file.POST("/:id", func(c *gin.Context) {
-		uploadFileMD5 := c.GetHeader("filemd5")
-		folderIDParse := c.Param("id")
-		isOK, folderID := utils.StringToUInt64(folderIDParse)
-		if !isOK {
-			logx.Warn("转换文件夹ID错误,上传文件无法继续", "ID:", folderIDParse)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "未知的文件夹ID",
-			})
-			return
+	file.POST("/upload/to/*path", func(c *gin.Context) {
+		Path := c.Param("path")
+		pathArr := strings.Split(Path, "/")
+		xm := make([]string, 0)
+		for _, s := range pathArr {
+			if len(s) > 0 {
+				xm = append(xm, s)
+			}
 		}
-		if !db.HaveFolder(folderID) {
-			logx.Warn("文件夹不存在,但仍然在上传", folderID)
+
+		have, searchPath, _ := database.PathSearch(xm)
+		if !have {
 			c.JSON(http.StatusNotFound, gin.H{
-				"error": "不存在的文件夹",
+				"error": "没有这个文件夹",
 			})
-			return
 		}
+
 		form, err := c.MultipartForm()
 		if err != nil {
 			return
@@ -112,33 +155,16 @@ func Router(router *gin.Engine) {
 				}
 				c.AbortWithStatus(http.StatusServiceUnavailable)
 			} else {
-				start1 := time.Now().Unix()
-				crc32str := encrypt.Crc32SumFile(open)
-				end1 := time.Now().Unix()
-				end1time := end1 - start1
-
-				start2 := time.Now().Unix()
-				md5str := encrypt.Md5SumFile(open)
-				end2 := time.Now().Unix()
-				end2time := end2 - start2
-
-				start3 := time.Now().Unix()
-				sha1str := encrypt.Sha1SumFile(open)
-				end3 := time.Now().Unix()
-				end3time := end3 - start3
-
-				start4 := time.Now().Unix()
-				sha256str := encrypt.Sha256SumFile(open)
-				end4 := time.Now().Unix()
-				end4time := end4 - start4
-
-				logx.Debug("上传了文件", "文件夹:", folderID, "名称:", files[0].Filename, "crc32:", crc32str, end1time, "md5:", md5str, end2time, "sha1:", sha1str, end3time, "sha256:", sha256str, end4time)
-
-				if md5str != uploadFileMD5 {
-					c.JSON(http.StatusBadRequest, gin.H{
-						"error": "文件验证错误",
+				fileID := utils.GenerateID()
+				if fileID == "" {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error": "很抱歉,文件ID生成错误,请重试",
 					})
+					return
 				}
+				crc32str := encrypt.Crc32Str(fileID)
+
+				logx.Debug("上传了文件", "文件夹:", Path, "名称:", files[0].Filename, "文件ID:", fileID)
 
 				err := os.MkdirAll(TmpPath+"/"+crc32str[:4], os.ModePerm)
 				if err != nil {
@@ -148,8 +174,8 @@ func Router(router *gin.Engine) {
 					})
 					return
 				}
-				err = c.SaveUploadedFile(files[0], TmpPath+"/"+crc32str[:4]+"/"+sha256str)
-				filepath := SavePath + "/" + crc32str[:4] + "/" + sha256str
+				err = c.SaveUploadedFile(files[0], TmpPath+"/"+crc32str[:4]+"/"+fileID)
+				filepath := SavePath + "/" + crc32str[:4] + "/" + fileID
 				if err != nil {
 					logx.Warn("前端上传文件保存错误", err)
 					c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -164,7 +190,7 @@ func Router(router *gin.Engine) {
 						})
 						return
 					}
-					err = os.Rename(TmpPath+"/"+crc32str[:4]+"/"+sha256str, filepath)
+					err = os.Rename(TmpPath+"/"+crc32str[:4]+"/"+fileID, filepath)
 					if err != nil {
 						c.JSON(http.StatusServiceUnavailable, gin.H{
 							"error": "移动临时文件错误",
@@ -173,21 +199,29 @@ func Router(router *gin.Engine) {
 					}
 
 					tm := time.Now()
-					nowTime := tm.Format("2006-01-02 15:04:05")
-					isOK, errorMsg := db.InsFile(folderID, model.FileStruct{
-						FileID:     0,
-						FolderID:   folderID,
-						FileName:   files[0].Filename,
-						FileSize:   uint64(files[0].Size),
-						ChangeTime: nowTime,
-						CreateTime: nowTime,
-						OwnerID:    0,
-					}, filepath)
-					if isOK {
+					self := &model.FileRowStruct{
+						ID:          fileID,
+						IsDir:       false,
+						OwnerFolder: searchPath.Self.ID,
+						OwnerID:     "0",
+						OwnerGroup:  "0",
+						Name:        files[0].Filename,
+						Size:        files[0].Size,
+						ChangeTime:  tm,
+						CreateTime:  tm,
+					}
+					if ok := database.Insert(self); ok == nil {
+						searchPath.Child = append(searchPath.Child, &database.File{
+							Name:   files[0].Filename,
+							IsDir:  false,
+							Parent: searchPath,
+							Self:   self,
+							Child:  nil,
+						})
 						c.Status(http.StatusOK)
 					} else {
-						c.JSON(http.StatusServiceUnavailable, gin.H{
-							"error": errorMsg,
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": ok.Error(),
 						})
 					}
 				}
@@ -199,19 +233,20 @@ func Router(router *gin.Engine) {
 			}
 		}
 	})
+
 	file.GET("/:id", func(c *gin.Context) {
 		FileIDUParse := c.Param("id")
-		fileOK, fileID := utils.StringToUInt64(FileIDUParse)
-		if !fileOK {
-			logx.Warn("转换文件ID错误", "ID:", FileIDUParse)
+		if len(FileIDUParse) != 16 {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "未知的文件ID",
+				"error": "文件ID不正确",
 			})
 			return
 		}
 
-		if ok, val := db.GetFilePath(fileID); ok {
-			c.File(val)
+		crc32str := encrypt.Crc32Str(FileIDUParse)
+		logx.Trace(path.Join(SavePath, crc32str[:4], FileIDUParse))
+		if have, _ := utils.PathExists(path.Join(SavePath, crc32str[:4], FileIDUParse)); have {
+			c.File(path.Join(SavePath, crc32str[:4], FileIDUParse))
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "文件不存在",
@@ -232,30 +267,30 @@ func Router(router *gin.Engine) {
 
 	userAuth := user.Group("/auth")
 	userAuth.POST("/login", func(c *gin.Context) {
-		name, nameHave := c.GetPostForm("name")
-		pass, passHave := c.GetPostForm("pass")
+		//name, nameHave := c.GetPostForm("name")
+		//pass, passHave := c.GetPostForm("pass")
 
-		if !nameHave || !passHave {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "参数错误",
-			})
-		}
+		// if !nameHave || !passHave {
+		// 	c.JSON(http.StatusBadRequest, gin.H{
+		// 		"error": "参数错误",
+		// 	})
+		// }
 
-		isHave, User := db.GetUserFormName(name)
-		if isHave {
-			if User.Pass == pass {
-				c.Status(http.StatusOK)
-				return
-			}
+		// isHave, User := db.GetUserFormName(name)
+		// if isHave {
+		// 	if User.Pass == pass {
+		// 		c.Status(http.StatusOK)
+		// 		return
+		// 	}
 
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "密码错误",
-			})
-			return
-		}
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "用户不存在",
-		})
+		// 	c.JSON(http.StatusForbidden, gin.H{
+		// 		"error": "密码错误",
+		// 	})
+		// 	return
+		// }
+		// c.JSON(http.StatusNotFound, gin.H{
+		// 	"error": "用户不存在",
+		// })
 		return
 	})
 }

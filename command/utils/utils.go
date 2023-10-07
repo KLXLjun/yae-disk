@@ -2,8 +2,30 @@ package utils
 
 import (
 	"encoding/binary"
+	"os"
 	"strconv"
+	"time"
+
+	gonanoid "github.com/matoous/go-nanoid"
+	retry "github.com/rafaeljesus/retry-go"
 )
+
+// GenerateID
+// 生成ID
+func GenerateID() string {
+	result := ""
+	if err := retry.Do(func() error {
+		str, genErr := gonanoid.Generate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 16)
+		if genErr != nil {
+			return genErr
+		}
+		result = str
+		return nil
+	}, 10, time.Millisecond*1); err != nil {
+		return ""
+	}
+	return result
+}
 
 // UInt64ToBytes
 // 将 uint64 转换为 []byte
@@ -33,4 +55,15 @@ func StringToUInt64(s string) (bool, uint64) {
 	} else {
 		return true, parseUint
 	}
+}
+
+func PathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
