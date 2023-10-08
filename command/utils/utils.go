@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"YaeDisk/logx"
 	"encoding/binary"
+	"io/fs"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -66,4 +69,41 @@ func PathExists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+func PathProcess(path []string) []string {
+	xm := make([]string, 0)
+	for _, s := range path {
+		if len(s) > 0 {
+			xm = append(xm, s)
+		}
+	}
+	return xm
+}
+
+func PathFileGet(path string) fs.FileInfo {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	return fi
+}
+
+func GetContentType(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		logx.Warn(err)
+	}
+	defer f.Close()
+
+	buffer := make([]byte, 512)
+
+	_, err = f.Read(buffer)
+	if err != nil {
+		return "application/octet-stream"
+	}
+
+	contentType := http.DetectContentType(buffer)
+
+	return contentType
 }

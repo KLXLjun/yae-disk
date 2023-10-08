@@ -333,14 +333,14 @@
 
     function OpenCreateFolder(){
         let value = document.getElementById("create-folder-name").value;
-        axios.post('/api/folder/create/' + value + '/to' + getPathUrl()).then(function(res){
+        axios.post('/api/folder/' + value + '/' + getPathUrl()).then(function(res){
             console.log(res.data);
             GetFolderAndFile(getPathUrl());
         });
     }
 
     function GetFolderAndFile(path){
-        axios.get('/api/disk' + path).then(function(res){
+        axios.get('/api/folder' + path).then(function(res){
             console.log(res.data);
             let p = res.data;
             let pflist = p.file;
@@ -469,7 +469,7 @@
             document.querySelector('body').classList.add('scroll-lock');
         }
 
-        document.getElementById('full_view_img').src = '/api/file/' + idx;
+        document.getElementById('full_view_img').src = '/api/file/id/' + idx;
         document.getElementById('fullscreen_view').style.display = 'flex';
     }
 

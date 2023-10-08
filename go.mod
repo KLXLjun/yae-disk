@@ -1,6 +1,6 @@
 module YaeDisk
 
-go 1.17
+go 1.20
 
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
@@ -11,7 +11,10 @@ require (
 	github.com/xujiajun/nutsdb v0.7.1
 )
 
-require github.com/mattn/go-sqlite3 v1.14.17 // indirect
+require (
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
+	github.com/orcaman/concurrent-map/v2 v2.0.1 // indirect
+)
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0 // indirect
@@ -31,9 +34,9 @@ require (
 	github.com/ugorji/go/codec v1.1.7 // indirect
 	github.com/xujiajun/mmap-go v1.0.1 // indirect
 	github.com/xujiajun/utils v0.0.0-20190123093513-8bf096c4f53b // indirect
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
-	golang.org/x/net v0.0.0-20190603091049-60506f45cf65 // indirect
-	golang.org/x/sys v0.0.0-20200116001909-b77594299b42 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/net v0.16.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

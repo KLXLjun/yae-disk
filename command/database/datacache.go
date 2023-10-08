@@ -4,17 +4,17 @@ import (
 	"YaeDisk/logx"
 	"YaeDisk/model"
 	"time"
+
+	cmap "github.com/orcaman/concurrent-map/v2"
 )
 
 type File struct {
-	Name   string
-	IsDir  bool
 	Parent *File
 	Self   *model.FileRowStruct
-	Child  []*File
+	Child  cmap.ConcurrentMap[string, *File]
 }
 
-var RootTree = File{Name: "Root", IsDir: true, Parent: nil, Self: &model.FileRowStruct{
+var RootTree = File{Parent: nil, Self: &model.FileRowStruct{
 	ID:          "0",
 	IsDir:       true,
 	OwnerFolder: "",
@@ -24,7 +24,7 @@ var RootTree = File{Name: "Root", IsDir: true, Parent: nil, Self: &model.FileRow
 	Size:        0,
 	ChangeTime:  time.Date(2022, 3, 12, 20, 47, 58, 0, time.Local),
 	CreateTime:  time.Date(2022, 3, 12, 20, 47, 58, 0, time.Local),
-}, Child: make([]*File, 0)}
+}, Child: cmap.New[*File]()}
 
 var All = make([]*model.FileRowStruct, 0)
 
@@ -37,22 +37,20 @@ func map2Tree() {
 	All = nil //数据不需要了
 }
 
-func Convert(items *File, parentID string) []*File {
-	tree := make([]*File, 0)
+func Convert(items *File, parentID string) cmap.ConcurrentMap[string, *File] {
+	tree := cmap.New[*File]()
 
 	for _, item := range All {
 		if item.OwnerFolder == parentID {
 			u := File{
-				Name:   item.Name,
-				IsDir:  item.IsDir,
 				Parent: items,
 				Self:   item,
-				Child:  make([]*File, 0),
+				Child:  cmap.New[*File](),
 			}
 			if item.IsDir {
 				u.Child = Convert(items, item.ID)
 			}
-			tree = append(tree, &u)
+			tree.Set(item.Name, &u)
 		}
 	}
 
@@ -66,7 +64,10 @@ func PathSearch(path []string) (bool, *File, *model.ResultFileRowStruct) {
 	}
 	lt := treeSearch(path, 0, &RootTree)
 	if lt != nil {
-		return true, lt, files2FolderAndFile(lt.Child)
+		if lt.Self.IsDir {
+			return true, lt, files2FolderAndFile(lt.Child)
+		}
+		return true, lt, nil
 	}
 	return false, nil, nil
 }
@@ -75,19 +76,22 @@ func treeSearch(path []string, pathDepth int, lastFolder *File) *File {
 	if len(path) == pathDepth {
 		return lastFolder
 	}
-	for _, v := range lastFolder.Child {
-		if v.Name == path[pathDepth] && v.IsDir {
-			return treeSearch(path, pathDepth+1, v)
-		}
+	t, have := lastFolder.Child.Get(path[pathDepth])
+	if !have {
+		return nil
 	}
-	return nil
+	if t.Self.IsDir {
+		return treeSearch(path, pathDepth+1, t)
+	} else {
+		return t
+	}
 }
 
-func files2FolderAndFile(input []*File) *model.ResultFileRowStruct {
+func files2FolderAndFile(input cmap.ConcurrentMap[string, *File]) *model.ResultFileRowStruct {
 	var files = make([]*model.FileRowStruct, 0)
 	var folders = make([]*model.FileRowStruct, 0)
-	for _, v := range input {
-		if v.IsDir {
+	for _, v := range input.Items() {
+		if v.Self.IsDir {
 			folders = append(folders, v.Self)
 		} else {
 			files = append(files, v.Self)
